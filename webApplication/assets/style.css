@@ -1,0 +1,141 @@
+/* Стили для контрола выбора, влияют на внешний вид самого элемента выбора */
+.Select-control {
+    background-color: #212529 !important;
+    color:white;
+    border-color: #1e2027;
+  }
+
+/* Стили для выпадающего меню выбора, определяют цвет фона, текста и границ */
+.Select-menu-outer {
+    background-color: #212529;
+    color: white;
+    border-color: #1e2027;
+}
+
+/* Стили для метки выбранного значения, устанавливают цвет текста */
+.Select-value-label {
+    color: white !important;
+}
+
+/* Стили для пользовательских кнопок, задают цвет фона, границ и текста */
+.btn-custom {
+    background-color: #1e2027 !important;
+    border-color: #1e2027 !important;
+    color: #fd7e14 !important;
+}
+
+/* Стили для модальных окон, определяют цвет фона, границ и текста */
+.modal-custom {
+    background-color: #212529 !important;
+    border-color: #1e2027 !important;
+    color: #ffffff !important;
+}
+
+/* Стили для offCanvas-меню, устанавливают цвет фона, границ и текста */
+.offCanvas-custom {
+    background-color: #212529 !important;
+    border-color: #1e2027 !important;
+    color: #ffffff !important;
+}
+
+/* Стили для рельс слайдера, задают цвет фона */
+.rc-slider-rail {
+    background-color: #ffffff !important;
+}
+
+/* Стили для трека слайдера, определяют цвет фона */
+.rc-slider-track {
+    background-color: #1e2027 !important;
+}
+
+/* Стили для ручки слайдера, устанавливают цвет фона и границ */
+.rc-slider-handle {
+    background-color: #1e2027 !important;
+    border: 2px solid #1e2027 !important;
+}
+
+/* Стили для точек слайдера, задают цвет фона и границ */
+.rc-slider-dot {
+    background-color: #ffffff !important;
+    border-color: #ffffff !important;
+}
+
+/* Стили при наведении на точки слайдера, изменяют цвет границ */
+.rc-slider-dot:hover {
+    border-color: #1e2027 !important;
+}
+
+/* Общие стили для тела страницы и содержимого вкладок, задают цвет фона и текста */
+.body, .tab-content {
+    background-color: #212529 !important; /* Цвет фона */
+    color: white !important; /* Цвет текста */
+}
+
+/* Стили для вкладок, устанавливают фон, цвет текста, границы и шрифт */
+.tab {
+    background-color: #212529 !important;
+    color: white !important;
+    border: 1px solid #1e2027 !important;
+    font-size: 16px !important;
+    font-weight: bold !important;
+    font-family: 'Arial', sans-serif;
+}
+
+/* Стили для активной вкладки, изменяют цвет фона и границ */
+.tab--selected {
+    background-color: #1e2027 !important;
+    color: white !important;
+    border: 1px solid #1e2027 !important;
+}
+
+/* Стили для основного фона веб-страницы */
+body, html {
+    margin: 0;
+    padding: 0;
+    background-color: #212529;
+}
+
+/* Стили для элементов аккордеона, устанавливают цвет границ */
+.accordion-custom .accordion-item {
+    border-color: #1e2027 !important;
+}
+
+/* Стили для кнопок аккордеона, определяют цвет фона и текста */
+.accordion-custom .accordion-button {
+    background-color: #212529 !important;
+    color: #ffffff !important;
+}
+
+/* Стили для раскрытых кнопок аккордеона, изменяют цвет фона и текста */
+.accordion-custom .accordion-button:not(.collapsed) {
+    background-color: #1e2027 !important;
+    color: #ffffff !important;
+}
+
+/* Стили для тела аккордеона, задают цвет фона, текста и границ */
+.accordion-custom .accordion-body {
+    background-color: #212529 !important;
+    color: #ffffff !important;
+    border-color: #1e2027 !important;
+}
+
+/* Стили для активной ссылки в навигационных вкладках, устанавливают цвет фона, текста и границ */
+.nav-tabs .nav-link.active {
+    background-color: #1e2027 !important;
+    border: none !important;
+    color: #ffffff !important;
+    font-size: 16px !important;
+    font-weight: bold !important;
+}
+
+/* Стили для ссылок в навигационных вкладках, задают размер шрифта, цвет текста и границ */
+.nav-tabs .nav-link {
+    font-size: 16px !important;
+    color: #ffffff !important;
+    border: none !important;
+}
+
+/* Убирает границы у навигационных вкладок */
+.nav-tabs {
+    border: none !important;
+}

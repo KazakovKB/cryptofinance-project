@@ -1,0 +1,9 @@
+dash
+plotly
+dash-bootstrap-components
+requests
+sqlalchemy
+pandas
+clickhouse-driver
+pyTelegramBotAPI
+psycopg2-binary

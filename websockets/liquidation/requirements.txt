@@ -1,0 +1,4 @@
+websocket-client
+pyTelegramBotAPI
+numpy
+clickhouse-driver

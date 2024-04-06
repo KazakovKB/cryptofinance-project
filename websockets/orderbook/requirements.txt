@@ -1,0 +1,5 @@
+websocket-client
+pyTelegramBotAPI
+numpy
+SQLAlchemy
+psycopg2-binary

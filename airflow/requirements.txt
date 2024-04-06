@@ -1,0 +1,7 @@
+openai
+beautifulsoup4
+deepl
+pyTelegramBotAPI
+sqlalchemy
+clickhouse-driver
+psycopg2-binary

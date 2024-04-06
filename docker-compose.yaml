@@ -1,0 +1,136 @@
+services:
+  postgres:
+    image: postgres:latest
+    container_name: postgres
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: database
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: always
+    networks:
+      - my_network
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: clickhouse
+    environment:
+      CLICKHOUSE_USER: user
+      CLICKHOUSE_PASSWORD: password
+      CLICKHOUSE_DB: database
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    restart: always
+    networks:
+      - my_network
+
+  orderbook-websocket:
+    image: image-orderbook-websocket
+    container_name: orderbook
+    environment:
+      POSTGRES: postgresql+psycopg2://user:password@host:5432/database
+      TOKEN: token
+      CHAT_ID: chat_id
+      SYMBOL: btcusdt
+    restart: always
+    working_dir: /app
+    command: [ "./wait.sh", "postgres:5432", "--", "python", "./orderbook_ws.py" ]
+    depends_on:
+      - postgres
+    networks:
+      - my_network
+
+  trades-websocket:
+    image: image-trades-websocket
+    container_name: trades
+    environment:
+      DATABASE: database
+      USER: user
+      PASSWORD: password
+      PORT: 9000
+      HOST: clickhouse
+      TOKEN: token
+      CHAT_ID: chat_id
+      SYMBOL: btcusdt
+    restart: always
+    working_dir: /app
+    command: [ "./wait.sh", "clickhouse:9000", "--", "python", "./trades_ws.py" ]
+    depends_on:
+      - clickhouse
+    networks:
+      - my_network
+
+  liquidation-websocket:
+    image: image-liquidation-websocket
+    container_name: liquidation
+    environment:
+      DATABASE: database
+      USER: user
+      PASSWORD: password
+      PORT: 9000
+      HOST: clickhouse
+      TOKEN: token
+      CHAT_ID: chat_id
+      SYMBOL: btcusdt
+    restart: always
+    working_dir: /app
+    command: [ "./wait.sh", "clickhouse:9000", "--", "python", "./liquidation_ws.py" ]
+    depends_on:
+      - clickhouse
+    networks:
+      - my_network
+
+  web-application:
+    image: image-web-application
+    container_name: web-application
+    environment:
+      DATABASE: database
+      USER: user
+      PASSWORD: password
+      PORT: 9000
+      HOST: clickhouse
+      TOKEN: token
+      CHAT_ID: chat_id
+      SYMBOL: btcusdt
+      POSTGRES: postgresql+psycopg2://user:password@host:5432/database
+    ports:
+      - "8050:8050"
+    working_dir: /app
+    command: [ "./wait.sh", "clickhouse:9000", "--", "./wait.sh", "postgres:5432", "--", "python", "./frontend.py" ]
+    depends_on:
+      - clickhouse
+      - postgres
+    networks:
+      - my_network
+
+  telegram:
+    image: image-telegram
+    container_name: telegram
+    environment:
+      POSTGRES_ASYNC: postgresql+asyncpg://user:password@host:5432/database
+      WEB_APP: url
+      TELEGRAM: token
+      OPENAI: token
+    working_dir: /app
+    command: [ "./wait.sh", "postgres:5432", "--", "python", "./telegramBot.py" ]
+    depends_on:
+      - postgres
+    networks:
+      - my_network
+
+volumes:
+  postgres_data:
+    external: true
+  clickhouse_data:
+    external: true
+
+networks:
+  my_network:
+    external: true
