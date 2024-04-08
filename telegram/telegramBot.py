@@ -14,22 +14,17 @@ from sqlalchemy import (
 )
 
 
-async def fetch_openai_response(question: str) -> str:
+async def fetch_openai_response(question: str, chat_history: list) -> str:
+    # Добавляем последний вопрос пользователя к истории диалога
+    chat_history.append({"role": "user", "content": question})
+
     response = await client_ai.chat.completions.create(
-        messages=[
-            {
-                "role": "system",
-                "content": ("Ты ассистент для трейдеров и аналитиков финансового рынка, специализирующийся"
-                            " на криптовалютном рынке. Ты можешь отвечать на вопросы, связанные с криптовалютами"
-                            " и финансами. Ты должен отвечать максимально лаконично.")
-            },
-            {
-                "role": "user",
-                "content": question
-            },
-        ],
+        messages=chat_history,
         model="gpt-3.5-turbo",
     )
+
+    # Добавляем ответ GPT к истории диалога
+    chat_history.append({"role": "assistant", "content": response.choices[0].message.content})
 
     return response.choices[0].message.content
 
@@ -194,6 +189,18 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     message = update.effective_message  # Получение объекта текущего сообщения
     bot_response = None  # Переменная для хранения ответа бота
 
+    # Получаем историю диалога для текущего пользователя, или инициализируем её, если её нет
+    chat_history = context.user_data.get('chat_history', [])
+    if not chat_history:
+        context.user_data['chat_history'] = [
+            {
+                "role": "system",
+                "content": ("Ты ассистент для трейдеров и аналитиков финансового рынка, специализирующийся"
+                            " на криптовалютном рынке. Ты можешь отвечать на вопросы, связанные с криптовалютами"
+                            " и финансами. Ты должен отвечать максимально лаконично.")
+            }
+        ]
+
     # Асинхронное подключение к базе данных для получения лимитов пользователя
     async with engine.connect() as conn:
         # Выполнение запроса на получение лимита и статуса подписки пользователя
@@ -204,13 +211,13 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     # Проверка статуса подписки пользователя
     if subscription_val:
         # Если подписка активна, получаем ответ от GPT без учёта лимита
-        bot_response = await fetch_openai_response(message.text)
+        bot_response = await fetch_openai_response(message.text, chat_history)
     else:
         # Если подписки нет, проверяем длину сообщения и оставшийся лимит запросов
         if len(message.text) <= 200:
             if limit > 0:
                 # Получаем ответ от GPT, если лимит не исчерпан
-                bot_response = await fetch_openai_response(message.text)
+                bot_response = await fetch_openai_response(message.text, chat_history)
             else:
                 # Отправка предупреждения о достижении лимита
                 warning = ('Еженедельный лимит запросов по вашему текущему плану уже достигнут.'
@@ -244,6 +251,9 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 .values(gpt_limit=users_table.c.gpt_limit - 1)
             )
 
+        # Сохраняем обновлённую историю диалога в context.user_data
+        context.user_data['chat_history'] = chat_history
+
         # Отправка ответа
         await update.message.reply_text(bot_response)
 
@@ -267,7 +277,7 @@ async def button_callback_handler(update: Update, context: CallbackContext) -> N
 
     # Обработка нажатия кнопки "Предыдущая новость"
     elif callback_data == 'previous_news' and user_data['offset'] > 0:
-        user_data['offset'] -= 1 # Уменьшение смещения для выборки предыдущей новости
+        user_data['offset'] -= 1  # Уменьшение смещения для выборки предыдущей новости
         # Получение данных предыдущей новости
         title, description, date, _, _, _ = await get_article(offset=user_data['offset'])
         # Формирование и отправка сообщения с новостью
