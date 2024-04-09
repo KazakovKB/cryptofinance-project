@@ -18,3 +18,11 @@ run_delete_trades = BashOperator(
     bash_command='python3 /opt/airflow/scripts/delete_trades.py',
     dag=dag
 )
+
+run_delete_news = BashOperator(
+    task_id='delete_news',
+    bash_command='python3 /opt/airflow/scripts/delete_news.py',
+    dag=dag
+)
+
+run_delete_trades >> run_delete_news

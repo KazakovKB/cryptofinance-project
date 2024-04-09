@@ -163,7 +163,7 @@ if __name__ == '__main__':
     # Создание объекта метаданных
     meta = MetaData()
 
-    # Описание таблицы пользователей
+    # Описание таблицы
     articles_table = Table(
         'articles',
         meta,
