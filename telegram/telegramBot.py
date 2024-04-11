@@ -65,24 +65,26 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             "тебе всю необходимую информацию."
         )
 
+        # Создание клавиатуры с кнопками
+        keyboard = [
+            [InlineKeyboardButton("👀", web_app=WebAppInfo(url=WEB_APP_URL))],
+            [InlineKeyboardButton("Скрыть", callback_data='delete_message')]
+        ]
+        markup = InlineKeyboardMarkup(keyboard)
+
+        # Отправка приветственного сообщения
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=welcome_message, parse_mode='Markdown')
+
+        # Отправка сообщения с предложением перейти к Dashboard
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id, text="*Перейти к Dashboard:*👇", parse_mode='Markdown', reply_markup=markup
+        )
     else:
         # Сообщение, отправляемое существующему пользователю
         welcome_message = f"Привет, {user.first_name}! Как я могу помочь тебе сегодня?"
 
-    # Создание клавиатуры с кнопками
-    keyboard = [
-        [InlineKeyboardButton("👀", web_app=WebAppInfo(url=WEB_APP_URL))],
-        [InlineKeyboardButton("Скрыть", callback_data='delete_message')]
-    ]
-    markup = InlineKeyboardMarkup(keyboard)
-
-    # Отправка приветственного сообщения
-    await context.bot.send_message(chat_id=update.effective_chat.id, text=welcome_message, parse_mode='Markdown')
-
-    # Отправка сообщения с предложением перейти к Dashboard
-    await context.bot.send_message(
-        chat_id=update.effective_chat.id, text="*Перейти к Dashboard:*👇", parse_mode='Markdown', reply_markup=markup
-    )
+        # Отправка приветственного сообщения
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=welcome_message, parse_mode='Markdown')
 
 
 # Асинхронная функция для обработки команды /about
