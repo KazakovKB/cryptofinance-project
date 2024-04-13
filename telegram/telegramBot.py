@@ -136,12 +136,58 @@ async def dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 # Асинхронная функция для обработки команды /profile
 async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # Раздел в процессе разработки
-    message = "Пожалуйста, ожидайте, профиль станет доступен в ближайшее время."
+    user = update.effective_user  # Получение данных активного пользователя
 
-    await context.bot.send_message(
-        chat_id=update.effective_chat.id, text=message, parse_mode='Markdown'
-    )
+    # Асинхронное подключение к базе данных
+    async with engine.connect() as conn:
+        # Выполнение SQL запроса для получения настроек пользователя
+        query = await conn.execute(select(users_table.c.newsletter, users_table.c.subscription)
+                                   .where(users_table.c.user_id == user.id))
+        newsletter_var, subscription_var = query.fetchone()  # Извлечение результатов запроса
+
+    # Определение текста подписки в зависимости от статуса пользователя
+    subscription_type = "🌟 Подписка: `PRO`" if subscription_var else "⭐️ Подписка: `Free`"
+    # Определение статуса рассылки новостей
+    newsletter_status = "🔔 Новости: `Вкл\\.`" if newsletter_var else "🔕 Новости: `Выкл\\.`"
+
+    # Форматирование имени пользователя с экранированием специальных символов для Markdown V2
+    first_name = (user.first_name.replace('-', '\\-').replace('.', '\\.')
+                  .replace('_', '\\_')) if user.first_name else '\\_'
+    last_name = (user.last_name.replace('-', '\\-').replace('.', '\\.')
+                 .replace('_', '\\_')) if user.last_name else '\\_'
+
+    # Создание клавиатуры с кнопками для управления
+    keyboard = [
+        [InlineKeyboardButton("⚙️ Подписка", callback_data='subscription_control')],
+        [InlineKeyboardButton("⚙️ Новости", callback_data='news_control')],
+        [InlineKeyboardButton("🕳 Скрыть", callback_data='delete_message')]
+    ]
+    markup = InlineKeyboardMarkup(keyboard)
+
+    # Сборка сообщения с информацией о пользователе
+    message = f"👤 {first_name} {last_name}\n\n{subscription_type}\n\n{newsletter_status}"
+
+    # Получение и отправка фото профиля пользователя, если оно доступно
+    photos = await context.bot.get_user_profile_photos(user_id=user.id)
+    if photos.photos:
+        photo = photos.photos[0][0]  # Выбор последнего фото
+        photo_file = await context.bot.get_file(photo.file_id)  # Получение файла фото
+
+        await context.bot.send_photo(
+            chat_id=update.effective_chat.id,
+            photo=photo_file.file_id,
+            caption=message,
+            parse_mode='MarkdownV2',
+            reply_markup=markup
+        )
+    else:
+        await context.bot.send_photo(
+            chat_id=update.effective_chat.id,
+            photo='https://ibb.co/C7XdhDM',
+            caption=message,
+            parse_mode='MarkdownV2',
+            reply_markup=markup
+        )
 
 
 # Асинхронная функция для обработки команды /subscription
@@ -257,13 +303,12 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         context.user_data['chat_history'] = chat_history
 
         # Отправка ответа
-        await update.message.reply_text(bot_response)
+        await update.message.reply_text(bot_response, parse_mode='Markdown')
 
 
 # Асинхронная функция для обработки колбэков от нажатия кнопок
 async def button_callback_handler(update: Update, context: CallbackContext) -> None:
     query = update.callback_query  # Получение объекта запроса колбэка
-    await query.answer()  # Отправка уведомления о получении колбэка
 
     user_data = context.user_data  # Доступ к временным данным пользователя
     callback_data = query.data  # Получение данных, переданных в колбэке
@@ -324,6 +369,73 @@ async def button_callback_handler(update: Update, context: CallbackContext) -> N
         markup = InlineKeyboardMarkup(keyboard)
         # Обновление текущего сообщения
         await query.edit_message_text(text=message, parse_mode='Markdown', reply_markup=markup)
+
+    # Обработка нажатия кнопки "Управление новостями"
+    elif callback_data == 'news_control':
+        message = "⚙️ *Новости:*"
+        # Создание клавиатуры с кнопками
+        keyboard = [
+            [InlineKeyboardButton("📩 Рассылка", callback_data='newsletter_status')],
+            [InlineKeyboardButton("🌐 Источники", callback_data='news_source')],
+            [InlineKeyboardButton("🔙 Назад", callback_data='profile')]
+        ]
+        markup = InlineKeyboardMarkup(keyboard)
+        # Обновление текущего сообщения
+        await query.edit_message_caption(caption=message, parse_mode='Markdown', reply_markup=markup)
+
+    # Обработка нажатия кнопки "Вернуться к профилю"
+    elif callback_data == 'profile':
+        # Удаление сообщения
+        await query.message.delete()
+        # Вызов функции обработчика команды /profile
+        await profile(update, context)
+
+    # Обработка нажатия кнопки "Настройка рассылки"
+    elif callback_data == 'newsletter_status':
+        # Асинхронное подключение к базе данных
+        async with engine.connect() as conn:
+            # Выполнение запроса на получение данных
+            query_sql = await conn.execute(select(users_table.c.newsletter).where(users_table.c.user_id == update.effective_user.id))
+            newsletter_var = query_sql.fetchone()
+
+        message = "⚙️ *Рассылка:*"
+        status = "🔔 Вкл." if bool(newsletter_var[0]) else "🔕 Выкл."
+        # Создание клавиатуры с кнопками
+        keyboard = [
+            [InlineKeyboardButton(status, callback_data='newsletter_checkout')],
+            [InlineKeyboardButton("🔙 Назад", callback_data='profile')]
+        ]
+        markup = InlineKeyboardMarkup(keyboard)
+        # Обновление текущего сообщения
+        await query.edit_message_caption(caption=message, parse_mode='Markdown', reply_markup=markup)
+
+    # Обработка нажатия кнопки "Изменение настройки рассылки"
+    elif callback_data == 'newsletter_checkout':
+        # Обновление статуса
+        async with engine.begin() as conn:
+            await conn.execute(
+                users_table.update().where(users_table.c.user_id == update.effective_user.id)
+                .values(newsletter=~users_table.c.newsletter)
+            )
+
+        # Всплывающее уведомление
+        await query.answer('✅\nНастройки рассылки успешно изменены!', show_alert=True)
+
+        # Удаление сообщения
+        await query.message.delete()
+        # Вызов функции обработчика команды /profile
+        await profile(update, context)
+
+    # Обработка нажатия кнопки "Источники новостей"
+    elif callback_data == 'news_source':
+        # Всплывающее уведомление
+        await query.answer('🏗\nПожалуйста, ожидайте, выбор источников новостей станет доступен в ближайшее время.',
+                           show_alert=True)
+
+    # Обработка нажатия кнопки "Управление подпиской"
+    elif callback_data == 'subscription_control':
+        # Всплывающее уведомление
+        await query.answer('🏗\nПожалуйста, ожидайте, подписка станет доступна в ближайшее время.', show_alert=True)
 
 
 # Асинхронная функция для получения одной статьи из базы данных
