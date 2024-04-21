@@ -118,6 +118,7 @@ services:
       WEB_APP: url
       TELEGRAM: token
       OPENAI: token
+      WALLET: token
     working_dir: /app
     command: [ "./wait.sh", "postgres:5432", "--", "python", "./telegramBot.py" ]
     depends_on:

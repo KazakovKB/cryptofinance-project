@@ -3,14 +3,17 @@ import logging
 from openai import AsyncOpenAI
 from sqlalchemy.ext.asyncio import create_async_engine
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
+import httpx
+import uuid
+from sqlalchemy.sql import func
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler,
     filters, CallbackQueryHandler, CallbackContext
 )
 from sqlalchemy import (
-    MetaData, Table, Column, SMALLINT,
-    BigInteger, String, Boolean, select, Date,
-    TIMESTAMP, TEXT, ForeignKey, ForeignKeyConstraint
+    MetaData, Table, Column, SMALLINT, Integer,
+    BigInteger, String, Boolean, select, Date, and_, text,
+    TIMESTAMP, TEXT, ForeignKey, ForeignKeyConstraint, Numeric
 )
 
 
@@ -192,12 +195,106 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 # Асинхронная функция для обработки команды /subscription
 async def subscription(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # Раздел в процессе разработки
-    message = "Пожалуйста, ожидайте, подписка станет доступна в ближайшее время."
+    user = update.effective_user
 
-    await context.bot.send_message(
-        chat_id=update.effective_chat.id, text=message, parse_mode='Markdown'
-    )
+    # Асинхронное подключение к базе данных
+    async with engine.connect() as conn:
+        # Выполнение SQL запроса для получения информации о наличии действующего заказа
+        query_sql = await conn.execute(select(orders_table.c.external_id).where(
+            and_(orders_table.c.user_id == user.id, orders_table.c.status == 'ACTIVE')
+        ))
+        ext_id = query_sql.fetchone()  # Извлечение результатов запроса
+
+        # Выполнение SQL запроса для получения информации о статусе пользователя
+        query_sql = await conn.execute(select(users_table.c.subscription).where(users_table.c.user_id == user.id))
+        status = query_sql.fetchone()[0]  # Извлечение результатов запроса
+
+    if status:
+        async with engine.connect() as conn:
+            query_sql = (
+                select(
+                    (orders_table.c.updated_at + text("INTERVAL '30 days'")).label('expires_on'),
+                    (orders_table.c.updated_at + text("INTERVAL '30 days'") - func.current_timestamp()).label(
+                        'time_left')
+                )
+                .where(
+                    and_(
+                        orders_table.c.user_id == user.id,
+                        orders_table.c.status == 'SUCCESS'
+                    )
+                )
+                .order_by(orders_table.c.updated_at.desc()).limit(1)
+            )
+
+            # Выполнение запроса
+            result = await conn.execute(query_sql)
+            subscription_info = result.fetchone()  # Извлечение результатов запроса
+
+        message = (f"Срок действия подписки истекает:\n📆 {subscription_info.expires_on.strftime('%Y-%m-%d %H:%M')}\n\n"
+                   f"*Оставшееся время:*\n⏳ {subscription_info.time_left}")
+        await context.bot.send_message(chat_id=update.effective_chat.id, text=message, parse_mode='Markdown')
+
+    else:
+        external_id = ext_id[0] if ext_id else str(uuid.uuid4())
+
+        headers = {
+            'Wpay-Store-Api-Key': wallet_tg,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+        }
+
+        payload = {
+            'amount': {
+                'currencyCode': 'TON',
+                'amount': '0.1',
+            },
+            'description': 'Subscription payment',
+            'externalId': f'{external_id}',
+            'timeoutSeconds': 3600,
+            'customerTelegramUserId': f'{user.id}',
+            'returnUrl': 'https://t.me/cryptofinance_project_bot',
+            'failReturnUrl': 'https://t.me/wallet',
+        }
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://pay.wallet.tg/wpay/store-api/v1/order",
+                json=payload, headers=headers, timeout=10
+            )
+            if response.status_code != 200:
+                data = None
+            else:
+                data = response.json()
+        if data:
+            if not ext_id:
+                # Словарь с данными о заказе для вставки в таблицу
+                order_data = {
+                    "external_id": external_id,
+                    "order_number": data['data']['number'],
+                    "amount": 0.1,
+                    "currency_code": 'TON',
+                    "description": 'Subscription payment',
+                    "status": data['data']['status'],
+                    "user_id": user.id
+                }
+
+                # Асинхронное добавление нового заказа в базу данных
+                async with engine.begin() as conn:
+                    await conn.execute(orders_table.insert(), order_data)
+
+            url = data['data']['payLink']
+            # Создание клавиатуры
+            keyboard = [
+                [InlineKeyboardButton("👛 Pay via Wallet", url=url)],
+            ]
+            markup = InlineKeyboardMarkup(keyboard)
+
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id, text='*Сменить план на Pro:*',
+                reply_markup=markup, parse_mode='Markdown'
+            )
+        else:
+            await context.bot.send_message(chat_id=update.effective_chat.id, text='Что-то пошло не так... 👀')
 
 
 # Асинхронная функция для обработки команды /news
@@ -514,6 +611,23 @@ if __name__ == '__main__':
         Column('source', String(30), nullable=False),
         Column('new', Boolean, default=True)
     )
+
+    orders_table = Table(
+        'orders', meta,
+        Column('external_id', String(255), unique=True, nullable=False),
+        Column('order_number', String(24), unique=True, nullable=False),
+        Column('amount', Numeric(10, 2), nullable=False),
+        Column('currency_code', String(3), nullable=False),
+        Column('description', TEXT),
+        Column('status', String(50), nullable=False),
+        Column('created_at', TIMESTAMP(timezone=True), default=func.current_timestamp()),
+        Column('updated_at', TIMESTAMP(timezone=True), default=func.current_timestamp(),
+               onupdate=func.current_timestamp()),
+        Column('user_id', Integer, ForeignKey('users.user_id'), nullable=False)
+    )
+
+    # API для Wallet Telegram
+    wallet_tg = os.environ.get('WALLET')
 
     # Получение URL веб-приложения из переменных окружения
     WEB_APP_URL = os.environ.get('WEB_APP')

@@ -2,3 +2,4 @@ openai
 sqlalchemy[asyncio]
 python-telegram-bot
 asyncpg
+httpx
