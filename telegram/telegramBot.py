@@ -200,10 +200,10 @@ async def subscription(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     # Асинхронное подключение к базе данных
     async with engine.connect() as conn:
         # Выполнение SQL запроса для получения информации о наличии действующего заказа
-        query_sql = await conn.execute(select(orders_table.c.external_id).where(
+        query_sql = await conn.execute(select(orders_table.c.id).where(
             and_(orders_table.c.user_id == user.id, orders_table.c.status == 'ACTIVE')
         ))
-        ext_id = query_sql.fetchone()  # Извлечение результатов запроса
+        order_id = query_sql.fetchone()  # Извлечение результатов запроса
 
         # Выполнение SQL запроса для получения информации о статусе пользователя
         query_sql = await conn.execute(select(users_table.c.subscription).where(users_table.c.user_id == user.id))
@@ -220,7 +220,7 @@ async def subscription(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 .where(
                     and_(
                         orders_table.c.user_id == user.id,
-                        orders_table.c.status == 'SUCCESS'
+                        orders_table.c.status == 'PAID'
                     )
                 )
                 .order_by(orders_table.c.updated_at.desc()).limit(1)
@@ -230,45 +230,177 @@ async def subscription(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             result = await conn.execute(query_sql)
             subscription_info = result.fetchone()  # Извлечение результатов запроса
 
-        message = (f"Срок действия подписки истекает:\n📆 {subscription_info.expires_on.strftime('%Y-%m-%d %H:%M')}\n\n"
+        message = (f"*Срок действия подписки истекает:*\n📆 {subscription_info.expires_on.strftime('%Y-%m-%d %H:%M')}\n\n"
                    f"*Оставшееся время:*\n⏳ {subscription_info.time_left}")
         await context.bot.send_message(chat_id=update.effective_chat.id, text=message, parse_mode='Markdown')
 
     else:
-        external_id = ext_id[0] if ext_id else str(uuid.uuid4())
+        if order_id:
+            headers = {
+                'Wpay-Store-Api-Key': wallet_tg,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+            }
 
-        headers = {
-            'Wpay-Store-Api-Key': wallet_tg,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-        }
+            payload = {
+                'id': order_id[0]
+            }
 
-        payload = {
-            'amount': {
-                'currencyCode': 'TON',
-                'amount': '0.1',
-            },
-            'description': 'Subscription payment',
-            'externalId': f'{external_id}',
-            'timeoutSeconds': 3600,
-            'customerTelegramUserId': f'{user.id}',
-            'returnUrl': 'https://t.me/cryptofinance_project_bot',
-            'failReturnUrl': 'https://t.me/wallet',
-        }
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    "https://pay.wallet.tg/wpay/store-api/v1/order/preview",
+                    params=payload, headers=headers, timeout=10
+                )
+                if response.status_code != 200:
+                    data = None
+                else:
+                    data = response.json()
 
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                "https://pay.wallet.tg/wpay/store-api/v1/order",
-                json=payload, headers=headers, timeout=10
-            )
-            if response.status_code != 200:
-                data = None
+            if data:
+                if data['data']['status'] == 'EXPIRED':
+                    # Обновление статуса заказа
+                    async with engine.begin() as conn:
+                        await conn.execute(
+                            orders_table.update().where(
+                                and_(orders_table.c.user_id == user.id, orders_table.c.status == 'ACTIVE')
+                            ).values(status='EXPIRED')
+                        )
+                    # Формирование нового заказа
+                    external_id = str(uuid.uuid4())
+
+                    headers = {
+                        'Wpay-Store-Api-Key': wallet_tg,
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                    }
+
+                    payload = {
+                        'amount': {
+                            'currencyCode': 'TON',
+                            'amount': '0.1',
+                        },
+                        'description': 'Subscription payment',
+                        'externalId': f'{external_id}',
+                        'timeoutSeconds': 86400,
+                        'customerTelegramUserId': f'{user.id}',
+                        'returnUrl': 'https://t.me/cryptofinance_project_bot',
+                        'failReturnUrl': 'https://t.me/wallet',
+                    }
+
+                    async with httpx.AsyncClient() as client:
+                        response = await client.post(
+                            "https://pay.wallet.tg/wpay/store-api/v1/order",
+                            json=payload, headers=headers, timeout=10
+                        )
+                        if response.status_code != 200:
+                            data = None
+                        else:
+                            data = response.json()
+                    if data:
+                        # Словарь с данными о заказе для вставки в таблицу
+                        order_data = {
+                            'id': data['data']['id'],
+                            "external_id": external_id,
+                            "order_number": data['data']['number'],
+                            "amount": 0.1,
+                            "currency_code": 'TON',
+                            "description": 'Subscription payment',
+                            "status": data['data']['status'],
+                            "user_id": user.id
+                        }
+
+                        # Асинхронное добавление нового заказа в базу данных
+                        async with engine.begin() as conn:
+                            await conn.execute(orders_table.insert(), order_data)
+
+                        url = data['data']['payLink']
+                        # Создание клавиатуры
+                        keyboard = [
+                            [InlineKeyboardButton("👛 Pay via Wallet", url=url)],
+                        ]
+                        markup = InlineKeyboardMarkup(keyboard)
+
+                        message = ('*Сменить план на Pro:*\n\n⚠️ После оплаты, для активации, '
+                                   'повторно используйте команду: /subscription')
+                        await context.bot.send_message(
+                            chat_id=update.effective_chat.id, text=message,
+                            reply_markup=markup, parse_mode='Markdown'
+                        )
+                    else:
+                        message = ("*Что-то пошло не так...* 👀\n\nПожалуйста,"
+                                   " повторно используйте команду: /subscription")
+                        await context.bot.send_message(chat_id=update.effective_chat.id,
+                                                       text=message, parse_mode='Markdown')
+
+                elif data['data']['status'] == 'PAID':
+                    async with engine.begin() as conn:
+                        await conn.execute(
+                            users_table.update().where(users_table.c.user_id == user.id).values(subscription=True)
+                        )
+
+                        await conn.execute(
+                            orders_table.update().where(
+                                and_(orders_table.c.user_id == user.id, orders_table.c.status == 'ACTIVE')
+                            ).values(status='PAID')
+                        )
+
+                    message = "*Ваш план изменен на Pro!* 🌟"
+                    await context.bot.send_message(
+                        chat_id=update.effective_chat.id, text=message, parse_mode='Markdown'
+                    )
+                else:
+                    url = data['data']['payLink']
+                    # Создание клавиатуры
+                    keyboard = [
+                        [InlineKeyboardButton("👛 Pay via Wallet", url=url)],
+                    ]
+                    markup = InlineKeyboardMarkup(keyboard)
+
+                    message = ('*Сменить план на Pro:*\n\n⚠️ После оплаты, для активации, '
+                               'повторно используйте команду: /subscription')
+                    await context.bot.send_message(
+                        chat_id=update.effective_chat.id, text=message,
+                        reply_markup=markup, parse_mode='Markdown'
+                    )
             else:
-                data = response.json()
-        if data:
-            if not ext_id:
+                message = ("*Что-то пошло не так...* 👀\n\nПожалуйста,"
+                           " повторно используйте команду: /subscription")
+                await context.bot.send_message(chat_id=update.effective_chat.id, text=message, parse_mode='Markdown')
+        else:
+            external_id = str(uuid.uuid4())
+
+            headers = {
+                'Wpay-Store-Api-Key': wallet_tg,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+            }
+
+            payload = {
+                'amount': {
+                    'currencyCode': 'TON',
+                    'amount': '0.1',
+                },
+                'description': 'Subscription payment',
+                'externalId': f'{external_id}',
+                'timeoutSeconds': 86400,
+                'customerTelegramUserId': f'{user.id}',
+                'returnUrl': 'https://t.me/cryptofinance_project_bot',
+                'failReturnUrl': 'https://t.me/wallet',
+            }
+
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    "https://pay.wallet.tg/wpay/store-api/v1/order",
+                    json=payload, headers=headers, timeout=10
+                )
+                if response.status_code != 200:
+                    data = None
+                else:
+                    data = response.json()
+            if data:
                 # Словарь с данными о заказе для вставки в таблицу
                 order_data = {
+                    'id': int(data['data']['id']),
                     "external_id": external_id,
                     "order_number": data['data']['number'],
                     "amount": 0.1,
@@ -282,19 +414,22 @@ async def subscription(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 async with engine.begin() as conn:
                     await conn.execute(orders_table.insert(), order_data)
 
-            url = data['data']['payLink']
-            # Создание клавиатуры
-            keyboard = [
-                [InlineKeyboardButton("👛 Pay via Wallet", url=url)],
-            ]
-            markup = InlineKeyboardMarkup(keyboard)
+                url = data['data']['payLink']
+                # Создание клавиатуры
+                keyboard = [
+                    [InlineKeyboardButton("👛 Pay via Wallet", url=url)],
+                ]
+                markup = InlineKeyboardMarkup(keyboard)
 
-            await context.bot.send_message(
-                chat_id=update.effective_chat.id, text='*Сменить план на Pro:*',
-                reply_markup=markup, parse_mode='Markdown'
-            )
-        else:
-            await context.bot.send_message(chat_id=update.effective_chat.id, text='Что-то пошло не так... 👀')
+                message = ('*Сменить план на Pro:*\n\n⚠️ После оплаты, для активации, '
+                           'повторно используйте команду: /subscription')
+                await context.bot.send_message(
+                    chat_id=update.effective_chat.id, text=message, reply_markup=markup, parse_mode='Markdown'
+                )
+            else:
+                message = ("*Что-то пошло не так...* 👀\n\nПожалуйста,"
+                           " повторно используйте команду: /subscription")
+                await context.bot.send_message(chat_id=update.effective_chat.id, text=message, parse_mode='Markdown')
 
 
 # Асинхронная функция для обработки команды /news
@@ -614,6 +749,7 @@ if __name__ == '__main__':
 
     orders_table = Table(
         'orders', meta,
+        Column('id', BigInteger, primary_key=True),
         Column('external_id', String(255), unique=True, nullable=False),
         Column('order_number', String(24), unique=True, nullable=False),
         Column('amount', Numeric(10, 2), nullable=False),
