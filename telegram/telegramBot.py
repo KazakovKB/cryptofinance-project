@@ -163,7 +163,7 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     keyboard = [
         [InlineKeyboardButton("⚙️ Подписка", callback_data='subscription_control')],
         [InlineKeyboardButton("⚙️ Новости", callback_data='news_control')],
-        [InlineKeyboardButton("🕳 Скрыть", callback_data='delete_message')]
+        [InlineKeyboardButton("💨 Скрыть", callback_data='delete_message')]
     ]
     markup = InlineKeyboardMarkup(keyboard)
 
@@ -195,7 +195,7 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 # Асинхронная функция для обработки команды /subscription
 async def subscription(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    user = update.effective_user
+    user = update.effective_user  # Получение данных активного пользователя
 
     # Асинхронное подключение к базе данных
     async with engine.connect() as conn:
@@ -209,8 +209,10 @@ async def subscription(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         query_sql = await conn.execute(select(users_table.c.subscription).where(users_table.c.user_id == user.id))
         status = query_sql.fetchone()[0]  # Извлечение результатов запроса
 
+    # Если у пользователя активная подписка
     if status:
         async with engine.connect() as conn:
+            # Подготовка SQL-запроса для получения информации о сроках действия подписки
             query_sql = (
                 select(
                     (orders_table.c.updated_at + text("INTERVAL '30 days'")).label('expires_on'),
@@ -230,10 +232,13 @@ async def subscription(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             result = await conn.execute(query_sql)
             subscription_info = result.fetchone()  # Извлечение результатов запроса
 
-        message = (f"*Срок действия подписки истекает:*\n📆 {subscription_info.expires_on.strftime('%Y-%m-%d %H:%M')}\n\n"
-                   f"*Оставшееся время:*\n⏳ {subscription_info.time_left}")
+        # Отправка информации о сроках подписки пользователя
+        message = (
+            f"*Срок действия подписки истекает:*\n📆 {subscription_info.expires_on.strftime('%Y-%m-%d %H:%M')}\n\n"
+            f"*Оставшееся время:*\n⏳ {subscription_info.time_left}")
         await context.bot.send_message(chat_id=update.effective_chat.id, text=message, parse_mode='Markdown')
 
+    # Если у пользователя нет активной подписки, но есть активный заказ
     else:
         if order_id:
             headers = {
@@ -246,6 +251,7 @@ async def subscription(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 'id': order_id[0]
             }
 
+            # Создание асинхронного HTTP клиента для запроса к API
             async with httpx.AsyncClient() as client:
                 response = await client.get(
                     "https://pay.wallet.tg/wpay/store-api/v1/order/preview",
@@ -256,6 +262,7 @@ async def subscription(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 else:
                     data = response.json()
 
+            # Если получены данные о заказе
             if data:
                 if data['data']['status'] == 'EXPIRED':
                     # Обновление статуса заказа
@@ -287,6 +294,7 @@ async def subscription(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                         'failReturnUrl': 'https://t.me/wallet',
                     }
 
+                    # Выполнение POST-запроса для создания нового заказа
                     async with httpx.AsyncClient() as client:
                         response = await client.post(
                             "https://pay.wallet.tg/wpay/store-api/v1/order",
@@ -296,10 +304,12 @@ async def subscription(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                             data = None
                         else:
                             data = response.json()
+
+                    # Если заказ успешно создан
                     if data:
-                        # Словарь с данными о заказе для вставки в таблицу
+                        # Вставка данных о новом заказе в базу данных
                         order_data = {
-                            'id': data['data']['id'],
+                            'id': int(data['data']['id']),
                             "external_id": external_id,
                             "order_number": data['data']['number'],
                             "amount": 0.1,
@@ -309,12 +319,11 @@ async def subscription(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                             "user_id": user.id
                         }
 
-                        # Асинхронное добавление нового заказа в базу данных
                         async with engine.begin() as conn:
                             await conn.execute(orders_table.insert(), order_data)
 
+                        # Подготовка ссылки для оплаты и отправка сообщения пользователю с кнопкой для оплаты
                         url = data['data']['payLink']
-                        # Создание клавиатуры
                         keyboard = [
                             [InlineKeyboardButton("👛 Pay via Wallet", url=url)],
                         ]
@@ -327,12 +336,14 @@ async def subscription(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                             reply_markup=markup, parse_mode='Markdown'
                         )
                     else:
+                        # Отправка сообщения о неудаче при создании заказа
                         message = ("*Что-то пошло не так...* 👀\n\nПожалуйста,"
                                    " повторно используйте команду: /subscription")
                         await context.bot.send_message(chat_id=update.effective_chat.id,
                                                        text=message, parse_mode='Markdown')
 
                 elif data['data']['status'] == 'PAID':
+                    # Обновление статуса пользователя и заказа в базе данных после успешной оплаты
                     async with engine.begin() as conn:
                         await conn.execute(
                             users_table.update().where(users_table.c.user_id == user.id).values(subscription=True)
@@ -344,13 +355,15 @@ async def subscription(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                             ).values(status='PAID')
                         )
 
+                    # Отправка сообщения об успешной активации Pro плана
                     message = "*Ваш план изменен на Pro!* 🌟"
                     await context.bot.send_message(
                         chat_id=update.effective_chat.id, text=message, parse_mode='Markdown'
                     )
                 else:
+                    # Иначе, отправка сообщения с предложением оплатить по старой ссылке
                     url = data['data']['payLink']
-                    # Создание клавиатуры
+
                     keyboard = [
                         [InlineKeyboardButton("👛 Pay via Wallet", url=url)],
                     ]
@@ -363,10 +376,12 @@ async def subscription(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                         reply_markup=markup, parse_mode='Markdown'
                     )
             else:
+                # Отправка сообщения об ошибке, если данные о заказе не получены
                 message = ("*Что-то пошло не так...* 👀\n\nПожалуйста,"
                            " повторно используйте команду: /subscription")
                 await context.bot.send_message(chat_id=update.effective_chat.id, text=message, parse_mode='Markdown')
         else:
+            # Если у пользователя нет активного заказа, инициация создания нового заказа
             external_id = str(uuid.uuid4())
 
             headers = {
@@ -388,6 +403,7 @@ async def subscription(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 'failReturnUrl': 'https://t.me/wallet',
             }
 
+            # Выполнение POST-запроса для создания нового заказа
             async with httpx.AsyncClient() as client:
                 response = await client.post(
                     "https://pay.wallet.tg/wpay/store-api/v1/order",
@@ -398,7 +414,7 @@ async def subscription(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 else:
                     data = response.json()
             if data:
-                # Словарь с данными о заказе для вставки в таблицу
+                # Вставка данных о новом заказе в базу данных
                 order_data = {
                     'id': int(data['data']['id']),
                     "external_id": external_id,
@@ -410,12 +426,12 @@ async def subscription(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                     "user_id": user.id
                 }
 
-                # Асинхронное добавление нового заказа в базу данных
                 async with engine.begin() as conn:
                     await conn.execute(orders_table.insert(), order_data)
 
+                # Подготовка ссылки для оплаты и отправка сообщения пользователю с кнопкой для оплаты
                 url = data['data']['payLink']
-                # Создание клавиатуры
+
                 keyboard = [
                     [InlineKeyboardButton("👛 Pay via Wallet", url=url)],
                 ]
@@ -627,7 +643,8 @@ async def button_callback_handler(update: Update, context: CallbackContext) -> N
         # Асинхронное подключение к базе данных
         async with engine.connect() as conn:
             # Выполнение запроса на получение данных
-            query_sql = await conn.execute(select(users_table.c.newsletter).where(users_table.c.user_id == update.effective_user.id))
+            query_sql = await conn.execute(
+                select(users_table.c.newsletter).where(users_table.c.user_id == update.effective_user.id))
             newsletter_var = query_sql.fetchone()
 
         message = "⚙️ *Рассылка:*"
@@ -666,8 +683,10 @@ async def button_callback_handler(update: Update, context: CallbackContext) -> N
 
     # Обработка нажатия кнопки "Управление подпиской"
     elif callback_data == 'subscription_control':
-        # Всплывающее уведомление
-        await query.answer('🏗\nПожалуйста, ожидайте, подписка станет доступна в ближайшее время.', show_alert=True)
+        # Удаление сообщения
+        await query.message.delete()
+        # Вызов функции обработчика команды /subscription
+        await subscription(update, context)
 
 
 # Асинхронная функция для получения одной статьи из базы данных
