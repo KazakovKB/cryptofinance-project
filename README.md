@@ -13,6 +13,34 @@ Crypto Finance - это инновационный проект, предназ�
 #### Дорожная карта проекта
 [![Miro](https://img.shields.io/badge/Miro-212529?logo=miro&logoColor=orange)](https://miro.com/app/board/uXjVNrrw8bA=/?share_link_id=622740406193)
 
+#### Используемый стек технологий
+<img alt="Static Badge" src="https://img.shields.io/badge/Python-blue?logo=Python&logoColor=orange&color=212529"> <img alt="Static Badge" src="https://img.shields.io/badge/PostgreSQL-212529?logo=PostgreSQL&logoColor=orange&color=212529"> <img alt="Static Badge" src="https://img.shields.io/badge/ClickHouse-212529?logo=Clickhouse&logoColor=orange&color=212529"> <img alt="Static Badge" src="https://img.shields.io/badge/Docker-212529?logo=Docker&logoColor=orange&color=212529"> <img alt="Static Badge" src="https://img.shields.io/badge/AirFlow-212529?logo=apacheairflow&logoColor=orange&color=212529">
+
+<img alt="Static Badge" src="https://img.shields.io/badge/NumPy-212529?logo=NumPy&logoColor=orange&color=212529"> <img alt="Static Badge" src="https://img.shields.io/badge/Pandas-212529?logo=Pandas&logoColor=orange&color=212529"> <img alt="Static Badge" src="https://img.shields.io/badge/Plotly-212529?logo=Plotly&logoColor=orange&color=212529"> <img alt="Static Badge" src="https://img.shields.io/badge/Dash-212529?logo=Plotly&logoColor=orange&color=212529"> <img alt="Static Badge" src="https://img.shields.io/badge/Linux-212529?logo=Linux&logoColor=orange&color=212529"> <img alt="Static Badge" src="https://img.shields.io/badge/API-212529?logo=&logoColor=orange&color=212529">
+
+<img alt="Static Badge" src="https://img.shields.io/badge/Websocket-212529?logo=&logoColor=orange&color=212529"> <img alt="Static Badge" src="https://img.shields.io/badge/SQLAlchemy-212529?logo=sqlalchemy&logoColor=orange&color=212529"> <img alt="Static Badge" src="https://img.shields.io/badge/OpenAI-212529?logo=openai&logoColor=orange&color=212529"> <img alt="Static Badge" src="https://img.shields.io/badge/Asyncio-212529?logo=&logoColor=orange&color=212529">
+
+#### Этапы разработки
+1. Формирование списка открытых источников данных;
+2. Изучение документации API источников данных;
+3. Разработка системы хранения и обработки данных;
+4. Проведение разведочного анализа данных (EDA);
+5. Разработка аналитического Dashboard на основе EDA;
+6. Создание терминала для визуализации данных; 
+7. Интеграция с Telegram и внедрение ИИ-ассистента;
+8. Автоматизация рутинных задач.
+
+#### Результат разработки
+- Трейдеры и инвесторы могут использовать эту систему для мониторинга
+рыночных условий и принятия обоснованных инвестиционных решений на основе
+анализа данных в реальном времени.
+- Аналитики и исследователи найдут в этом проекте ценный инструмент для
+проведения глубокого анализа рынка, позволяющий выявлять тренды и
+прогнозировать будущие изменения.
+- Разработанный проект обеспечивает комплексное решение для анализа и
+мониторинга криптовалютного рынка, предлагая пользователям мощные
+инструменты для обработки и визуализации данных.
+
 #### Основные функции
 - *Telegram Bot*: Простой и интуитивно понятный доступ
 к услугам прямо через Telegram.
@@ -22,9 +50,9 @@ Crypto Finance - это инновационный проект, предназ�
 анализа новостей, рынка и простого общения.
 - *Актуальные новости:* Моментальная рассылка новостей
 и аналитических заключений.
-- *Система подписки*: доступ к функционалу ИИ без ограничений.
+- *Бизнес модель*: доступ к продвинутому функционалу без ограничений.
 
-#### Установка и запуск
+#### Начало работы с ботом
 Откройте Telegram и найдите бота по username:
 [@cryptofinance_project_bot](https://t.me/cryptofinance_project_bot).
 
