@@ -25,4 +25,11 @@ run_delete_news = BashOperator(
     dag=dag
 )
 
-run_delete_trades >> run_delete_news
+run_update_status = BashOperator(
+    task_id='upd_subscription',
+    bash_command='python3 /opt/airflow/scripts/upd_subscription.py',
+    dag=dag
+)
+
+
+run_update_status >> run_delete_trades >> run_delete_news

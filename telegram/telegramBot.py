@@ -346,7 +346,10 @@ async def subscription(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                     # Обновление статуса пользователя и заказа в базе данных после успешной оплаты
                     async with engine.begin() as conn:
                         await conn.execute(
-                            users_table.update().where(users_table.c.user_id == user.id).values(subscription=True)
+                            users_table.update().where(users_table.c.user_id == user.id).values(
+                                subscription=True,
+                                subscription_end=func.current_date() + text('INTERVAL \'31 day\'')
+                            )
                         )
 
                         await conn.execute(
@@ -740,7 +743,8 @@ if __name__ == '__main__':
         Column('is_bot', Boolean),
         Column('gpt_limit', SMALLINT, default=20),
         Column('newsletter', Boolean, default=True),
-        Column('subscription', Boolean, default=False)
+        Column('subscription', Boolean, default=False),
+        Column('subscription_end', Date)
     )
 
     messages_table = Table(
