@@ -11,6 +11,9 @@ def main():
     try:
         query = f"ALTER TABLE cryptofinance.agg_trades DELETE WHERE trade_time < toDate(NOW()) - INTERVAL 8 DAY"
         client.execute(query)
+
+        query = f"ALTER TABLE cryptofinance.liquidation DELETE WHERE event_time < toDate(NOW()) - INTERVAL 8 DAY"
+        client.execute(query)
     except Exception as e:
         alert('*DELETE:* ошибка при запросе DELETE\n{}'.format(e))
         raise
