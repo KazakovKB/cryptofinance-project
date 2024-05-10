@@ -54,20 +54,20 @@ class CoinDesk:
                     if not self.__query_select(link):
                         url = self.domain + link
                         article = self.__gpt(url)
+                        if article:
+                            title = self.translator.translate_text(title, target_lang="RU").text
+                            description = self.translator.translate_text(description, target_lang="RU").text
 
-                        title = self.translator.translate_text(title, target_lang="RU").text
-                        description = self.translator.translate_text(description, target_lang="RU").text
+                            article_data = {
+                                "title": title,
+                                "link": link,
+                                "description": description,
+                                "date": date,
+                                'article': article,
+                                'source': 'CoinDesk'
+                            }
 
-                        article_data = {
-                            "title": title,
-                            "link": link,
-                            "description": description,
-                            "date": date,
-                            'article': article,
-                            'source': 'CoinDesk'
-                        }
-
-                        self.__query_insert(article_data)
+                            self.__query_insert(article_data)
             else:
                 check_class = soup.find('div', class_="group__TimelineGroupdHeader-sc-ts6p1z-2 emJmAY")
                 if not check_class:
@@ -126,23 +126,23 @@ class CoinDesk:
 
     def __gpt(self, url):
         article = self.__get_article(url)
+        if article:
+            # Создание запроса к модели GPT для генерации краткого содержания и выводов статьи
+            chat_completion = client_ai.chat.completions.create(
+                messages=[
+                    {
+                        "role": "user",
+                        "content": (f"О чем говорится в этой статье:\n'{article}'\n\n"
+                                    f"Какие выводы можно сделать на основе этой статьи?"
+                                    f" Подготовь ответ для публикации на русском языке и используя"
+                                    f" parse_mode Markdown.")
+                    }
+                ],
+                model="gpt-3.5-turbo",  # Указание на использование модели GPT-3.5-turbo
+            )
 
-        # Создание запроса к модели GPT для генерации краткого содержания и выводов статьи
-        chat_completion = client_ai.chat.completions.create(
-            messages=[
-                {
-                    "role": "user",
-                    "content": (f"О чем говорится в этой статье:\n'{article}'\n\n"
-                                f"Какие выводы можно сделать на основе этой статьи?"
-                                f" Подготовь ответ для публикации на русском языке и используя"
-                                f" parse_mode Markdown.")
-                }
-            ],
-            model="gpt-3.5-turbo",  # Указание на использование модели GPT-3.5-turbo
-        )
-
-        # Возвращение сгенерированного ответа от GPT
-        return chat_completion.choices[0].message.content
+            # Возвращение сгенерированного ответа от GPT
+            return chat_completion.choices[0].message.content
 
     def __alert(self, message):
         bot = telebot.TeleBot(self.token)
