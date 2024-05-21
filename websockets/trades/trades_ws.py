@@ -37,6 +37,9 @@ class Trades:
             query = f"INSERT INTO {self.table} (*) VALUES"
 
             try:
+                # Установите лимит памяти для текущей сессии
+                self.db_client.execute("SET max_memory_usage = 10000000000")
+                # Выполните вставку данных
                 self.db_client.execute(query, [event])
             except Exception as e:
                 self.alert(f">>>Ошибка при вставке:<<<\n{e}")
