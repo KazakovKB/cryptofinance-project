@@ -69,7 +69,7 @@ class Trades:
     # Отправка уведомлений через Telegram
     def alert(self, data):
         bot = telebot.TeleBot(self.token)
-        bot.send_message(text=f'*Received data from Trades:*\n\n {data}', chat_id=self.chat_id, parse_mode='Markdown')
+        bot.send_message(text=f'Received data from Trades:\n\n {data}', chat_id=self.chat_id)
 
 
 if __name__ == '__main__':
