@@ -259,6 +259,8 @@ async def subscription(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 )
                 if response.status_code != 200:
                     data = None
+                    message = f'Pay Wallet: status code = {response.status_code}\n\n{response.text}'
+                    await context.bot.send_message(chat_id=update.effective_chat.id, text=message)
                 else:
                     data = response.json()
 
@@ -284,7 +286,7 @@ async def subscription(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                     payload = {
                         'amount': {
                             'currencyCode': 'TON',
-                            'amount': '0.1',
+                            'amount': '0.05',
                         },
                         'description': 'Subscription payment',
                         'externalId': f'{external_id}',
@@ -396,7 +398,7 @@ async def subscription(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             payload = {
                 'amount': {
                     'currencyCode': 'TON',
-                    'amount': '0.1',
+                    'amount': '0.05',
                 },
                 'description': 'Subscription payment',
                 'externalId': f'{external_id}',
@@ -414,6 +416,8 @@ async def subscription(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                 )
                 if response.status_code != 200:
                     data = None
+                    message = f'Pay Wallet: status code = {response.status_code}\n\n{response.text}'
+                    await context.bot.send_message(chat_id=update.effective_chat.id, text=message)
                 else:
                     data = response.json()
             if data:
@@ -521,7 +525,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 # Отправка предупреждения о достижении лимита
                 warning = ('Еженедельный лимит запросов по вашему текущему плану уже достигнут.'
                            'Чтобы продолжить пользоваться нашими услугами без ограничений, '
-                           'вы можете перейти на подписку с безлимитным доступом.')
+                           'вы можете перейти на подписку (/subscription) с безлимитным доступом.')
 
                 await update.message.reply_text(warning)
         else:
