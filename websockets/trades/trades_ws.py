@@ -6,6 +6,7 @@ import websocket
 import telebot
 import logging
 import os
+import time
 
 
 class Trades:
@@ -43,6 +44,7 @@ class Trades:
                 self.db_client.execute(query, [event])
             except Exception as e:
                 self.alert(f">>>Ошибка при вставке:<<<\n{e}")
+                time.sleep(300)
 
     # Обработка ошибок WebSocket
     def on_error(self, ws, error):
@@ -104,3 +106,4 @@ if __name__ == '__main__':
 
     # Запуск Websocket
     ws_client.run()
+

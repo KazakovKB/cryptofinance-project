@@ -537,22 +537,23 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     # Если получен ответ от GPT, сохраняем данные сообщения и ответа в базу данных
     if bot_response:
-        message_data = {
-            "message_id": message.message_id,
-            "chat_id": message.chat_id,
-            "date": message.date,
-            "text": message.text,
-            'gpt': bot_response
-        }
+        if message.id != 1922097075:
+            message_data = {
+                "message_id": message.message_id,
+                "chat_id": message.chat_id,
+                "date": message.date,
+                "text": message.text,
+                'gpt': bot_response
+            }
 
-        # Вставка данных сообщения и ответа в базу данных и обновление лимита
-        async with engine.begin() as conn:
-            await conn.execute(messages_table.insert(), message_data)
+            # Вставка данных сообщения и ответа в базу данных и обновление лимита
+            async with engine.begin() as conn:
+                await conn.execute(messages_table.insert(), message_data)
 
-            await conn.execute(
-                users_table.update().where(users_table.c.user_id == message.chat_id)
-                .values(gpt_limit=users_table.c.gpt_limit - 1)
-            )
+                await conn.execute(
+                    users_table.update().where(users_table.c.user_id == message.chat_id)
+                    .values(gpt_limit=users_table.c.gpt_limit - 1)
+                )
 
         # Сохраняем обновлённую историю диалога в context.user_data
         context.user_data['chat_history'] = chat_history
